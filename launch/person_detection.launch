@@ -1,13 +1,15 @@
 <launch>
   <!--
   <node name="uvc_camera_node" pkg="uvc_camera" type="uvc_camera_node" >
-    <remap from="image_raw" to="image"/>
+    <remap from="image_raw" to="image_raw"/>
     <param name="device" value="/dev/video4" />
   </node>
   -->
-  <node name="colorTracking" pkg="kcctdetection" type="colorTracking" />
+  <node name="colorTracking" pkg="kcctdetection" type="colorTracking" >
+    <remap from="image" to="image_raw"/>
+  </node>
   <node name="person_tracking" pkg="kcctdetection" type="person_tracking" >
-    <remap from="camera_cmd_vel" to="final_cmd_vel"/>
+    <remap from="camera_cmd_vel" to="camera_cmd_vel"/>
   </node>
   <include file="$(find kcctdetection)/launch/pcl_handler.launch"/>
 </launch>

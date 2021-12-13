@@ -55,30 +55,36 @@ geometry_msgs::Twist person_tracking(double front_angle,double vel_max){
      ros::Time start_time;
      const double angle_p=0.005;
      double angle_max=0.2;
-     const double front_ditect_dis=5.0;
-     static bool ditect_once=false;
+     const double front_detect_dis=5.0;
+     static bool detect_once=false;
+     static bool detect_once_flag=false;
         calc_vel.linear.x=vel_max;
         calc_vel.angular.z=-front_angle;
         calc_vel.angular.z*=angle_p;
     calc_vel.angular.z=double_constrain(calc_vel.angular.z,-angle_max,angle_max);
-    if(true/*wp_type.at(now_wp)==waypoint_type_camera*/){
+    if(now_type.data==waypoint_type_str(waypoint_type::person_detection)){
+      if(detect_once_flag){
+        detect_once=true;
+        detect_once_flag=false;
+      }
+    }
+    else{
+      detect_once_flag=true;
+    }
+    if(detect_once){
       if(pcl_dis<0.9){
         calc_vel.linear.x=0;
         if(ros::Time::now().sec-start_time.sec>3){
-          //ditect_once=true;
+          detect_once=false;
         }
       }
       else{
         start_time=ros::Time::now();
       }
-      cout<<ros::Time::now().sec-start_time.sec<<endl;
-      if(ditect_once){
-        calc_vel.linear.x=0;
-        calc_vel.angular.z=0;
-      }
     }
     else{
-      ditect_once=false;
+      calc_vel.linear.x=0;
+      calc_vel.angular.z=0;
     }
     //calc_vel.linear.x=0;//*=(abs(calc_vel.angular.z)<curve_stop_angle);
     return calc_vel;
@@ -86,7 +92,7 @@ geometry_msgs::Twist person_tracking(double front_angle,double vel_max){
 
 
 void camera_callback(const std_msgs::Float32MultiArray& camera_){
-    auto cmd_vel=person_tracking(camera_.data.at(0),2.5/3.6);
+    auto cmd_vel=person_tracking(camera_.data.at(0),1.5/3.6);
     cmd_pub.publish(cmd_vel);
 }
 
