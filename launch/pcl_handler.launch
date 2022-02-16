@@ -1,9 +1,5 @@
 <launch>
      
-     <node pkg="kcctdetection" name="laser2pc" type="laser2pc" output="screen">
-     </node>
- 
- 
      <!-- 近傍点探索に使うパラメータと結果が入る変数
      radius: 半径 r [m].
      max_nn: 最近傍のお隣さんを何点見つかったら探索を打ち切るか。(nn = nearest neighbor)

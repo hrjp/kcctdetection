@@ -137,8 +137,7 @@ target_link_libraries(colorTracking ${catkin_LIBRARIES})
 add_executable(person_tracking src/person_tracking)
 target_link_libraries(person_tracking ${catkin_LIBRARIES})
 
-add_executable(laser2pc src/laser2pc.cpp)
-target_link_libraries(laser2pc ${catkin_LIBRARIES})
+
 
 add_executable(pcl_distance src/pcl_distance)
 target_link_libraries(pcl_distance ${catkin_LIBRARIES})
