@@ -1,0 +1,14 @@
+<launch>
+    <arg name="map_pcd" default="$(find kcctcore)/config/pcd/autoware_world.pcd" />
+
+
+    <!--node pkg="kcctdetection" name="pcl_diff" type="pcl_diff" >
+        <param name="map_pcd" type="str" value="$(arg map_pcd)" />
+    </node--> 
+
+    <!--node pkg="kcctdetection" name="clustering_and_tracking" type="clustering_and_tracking" >
+    </node-->
+    
+    <node pkg="kcctdetection" name="dynamicCloudTracker" type="dynamicCloudTracker" >
+    </node>
+</launch>
