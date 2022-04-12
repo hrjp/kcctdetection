@@ -1,9 +1,9 @@
 /**
-* @file dynamicCloudTracker.cpp
+* @file dynamicCloudDetector.cpp
 * @brief
 * @author Akiro Harada
 * @date
-* @details 動的なオブジェクトのトラッキング
+* @details 動的な点群の検出
 */
 
 // ROS
@@ -375,18 +375,14 @@ void divide_cloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, pcl::PointCl
 
 geometry_msgs::TransformStamped transform;
 
-void callback(const sensor_msgs::PointCloud2ConstPtr& ros_pc_input_, const nav_msgs::OdometryConstPtr& odom_input){
-    
-    sensor_msgs::PointCloud2 ros_pc_input = *ros_pc_input_;
-    //Eigen::Matrix4f mat = tf2::transformToEigen(transform.transform).matrix().cast<float>();
-    //pcl_ros::transformPointCloud(mat, *ros_pc_input_, ros_pc_input);
+void callback(const sensor_msgs::PointCloud2ConstPtr& ros_pc_input, const nav_msgs::OdometryConstPtr& odom_input){
     
     pcl::PointCloud<pcl::PointXYZ>::Ptr pc_input (new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::fromROSMsg(ros_pc_input, *pc_input);
+    pcl::fromROSMsg(*ros_pc_input, *pc_input);
     pcl::PointCloud<pcl::PointXYZ>::Ptr pc_filtered(new pcl::PointCloud<pcl::PointXYZ>);
     
     pc_filtered = downsample_cloud(pc_input, 0.1f);
-    pc_filtered = crop_cloud(pc_filtered, Eigen::Vector4f(-10, -10, -1, 1), Eigen::Vector4f(10, 10, 1, 1));
+    pc_filtered = crop_cloud(pc_filtered, Eigen::Vector4f(-10, -10, -1, 1), Eigen::Vector4f(10, 10, 1.2, 1));
     pc_filtered = remove_roof(pc_filtered, Eigen::Vector4f(-1, -1, -1, 1), Eigen::Vector4f(1, 1, 1, 1));
 
     std::tuple<pcl::PointCloud<pcl::PointXYZ>::Ptr, pcl::PointCloud<pcl::PointXYZ>::Ptr> pc_segmented;
@@ -395,7 +391,7 @@ void callback(const sensor_msgs::PointCloud2ConstPtr& ros_pc_input_, const nav_m
     pcl::PointCloud<pcl::PointXYZ>::Ptr pc_road = std::get<0>(pc_segmented);
     pcl::PointCloud<pcl::PointXYZ>::Ptr pc_obstacle = std::get<1>(pc_segmented);
 
-    pc_obstacle = crop_cloud(pc_obstacle, Eigen::Vector4f(-10, -10, -0.6, 1), Eigen::Vector4f(10, 10, 1, 1));
+    pc_obstacle = crop_cloud(pc_obstacle, Eigen::Vector4f(-10, -10, -0.6, 1), Eigen::Vector4f(10, 10, 1.2, 1));
     
     static Eigen::Vector2d last_odom_pos(odom_input->pose.pose.position.x, odom_input->pose.pose.position.y);
     static double last_odom_yaw = tf2::getYaw(odom_input->pose.pose.orientation);
@@ -435,7 +431,7 @@ void callback(const sensor_msgs::PointCloud2ConstPtr& ros_pc_input_, const nav_m
     pcl::toROSMsg(*dynamic_cloud, ros_pc_dynamic);
     pcl::toROSMsg(*static_cloud, ros_pc_static);
 
-    ros_pc_dynamic.header = ros_pc_static.header = ros_pc_input.header;
+    ros_pc_dynamic.header = ros_pc_static.header = ros_pc_input->header;
 
     dynamic_pub.publish(ros_pc_dynamic);
     static_pub.publish(ros_pc_static);

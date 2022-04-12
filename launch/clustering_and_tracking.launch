@@ -1,0 +1,6 @@
+<launch>
+    <node pkg="kcctdetection" name="dynamicCloudDetection" type="dynamicCloudDetection" >
+    </node>
+    <node pkg="kcctdetection" name="cloudClustering" type="cloudClustering" >
+    </node>
+</launch>

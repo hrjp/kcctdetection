@@ -142,20 +142,17 @@ target_link_libraries(person_tracking ${catkin_LIBRARIES})
 add_executable(pcl_distance src/pcl_distance)
 target_link_libraries(pcl_distance ${catkin_LIBRARIES})
 
-add_executable(clustering_and_tracking src/clustering_and_tracking)
-target_link_libraries(clustering_and_tracking ${catkin_LIBRARIES})
-
-add_executable(pcl_diff src/pcl_diff)
-target_link_libraries(pcl_diff ${catkin_LIBRARIES})
-
 find_package(OpenMP REQUIRED)
 if(OpenMP_FOUND)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
-add_executable(dynamicCloudTracker src/dynamicCloudTracker)
-target_link_libraries(dynamicCloudTracker ${catkin_LIBRARIES})
+add_executable(dynamicCloudDetection src/dynamicCloudDetection)
+target_link_libraries(dynamicCloudDetection ${catkin_LIBRARIES})
+
+add_executable(cloudClustering src/cloudClustering)
+target_link_libraries(cloudClustering ${catkin_LIBRARIES})
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
