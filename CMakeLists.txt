@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   pcl_ros
   laser_geometry
+  pcl_conversions
 )
 
 
@@ -127,17 +128,24 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
 )
 
 set(HEADERS include/kcctdetection/waypoint_type.h)
-set(HEADERS include/kcctdetection/TFtoPose.h)
+set(HEADERS include/kc_tracker/CKalmanFilter.h)
+set(HEADERS include/kc_tracker/featureDetection.h)
+set(HEADERS include/pcUtils/groundRemoval.h)
+set(HEADERS include/pcUtils/componentClustering.h)
+set(HEADERS include/pcUtils/cloudSegmentation.h)
+set(HEADERS include/laneDetector/lidar_lane_detector.h)
+set(HEADERS include/laneDetector/point_os1.h)
+set(HEADERS include/laneDetector/point_xyzir.h)
 
 add_executable(colorTracking   src/colorTracking.cpp)
 target_link_libraries(colorTracking ${catkin_LIBRARIES})
 
 add_executable(person_tracking src/person_tracking)
 target_link_libraries(person_tracking ${catkin_LIBRARIES})
-
 
 add_executable(pcl_distance src/pcl_distance)
 target_link_libraries(pcl_distance ${catkin_LIBRARIES})
@@ -148,11 +156,17 @@ if(OpenMP_FOUND)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
-add_executable(dynamicCloudDetection src/dynamicCloudDetection)
-target_link_libraries(dynamicCloudDetection ${catkin_LIBRARIES})
+add_executable(dynamicObstacleTracking src/dynamicObstacleTracking)
+target_link_libraries(dynamicObstacleTracking ${catkin_LIBRARIES})
 
-add_executable(cloudClustering src/cloudClustering)
-target_link_libraries(cloudClustering ${catkin_LIBRARIES})
+add_executable(map2pc src/map2pc.cpp)
+target_link_libraries(map2pc ${catkin_LIBRARIES})
+
+add_executable(test_node src/test_node)
+target_link_libraries(test_node ${catkin_LIBRARIES})
+
+add_executable(laneDetection src/laneDetection)
+target_link_libraries(laneDetection ${catkin_LIBRARIES})
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}

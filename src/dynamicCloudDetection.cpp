@@ -28,12 +28,13 @@
 // PCL
 #include <pcl/common/common.h>
 #include <pcl/common/transforms.h>
-#include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/crop_box.h>
 
 #include <omp.h>
+
+#include "dynamicObstacleTracking/groundRemoval.h"
 
 ros::Publisher grid_pub;
 ros::Publisher dynamic_pub;
@@ -42,12 +43,12 @@ ros::Publisher static_pub;
 std::string map_frameId = "map";
 std::string base_link_frameId = "base_link";
 
-double resolution = 0.5;
+double resolution = 0.25;
 double width = 20.0;
 double occupancyThreshold = 0.5;
 double beam_num = 720;
-double logOdds_inc = 0.15;
-double logOdds_dec = 0.4;
+double logOdds_inc = 0.4;
+double logOdds_dec = 0.65;
 
 int grid_width = width/resolution;
 int grid_num = grid_width*grid_width;
@@ -57,7 +58,7 @@ int grid_width_2 = grid_width/2;
 class GridCell{
     public:
         GridCell(void){
-            logOdds = 0;
+            logOdds = 10;
         }
 
         double get_occupancy(void){
@@ -70,10 +71,6 @@ class GridCell{
 
         void add_logOdds(double lo){
             logOdds += lo;
-            //if(logOdds>10.0)
-            //    logOdds = 10.0;
-            //else if(logOdds<-10.0)
-            //    logOdds = 10.0;
         }
 
         double logOdds;
@@ -139,44 +136,6 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr remove_roof(pcl::PointCloud<pcl::PointXYZ>::
     return cloud;
 } // remove_roof()
 
-std::tuple<pcl::PointCloud<pcl::PointXYZ>::Ptr, pcl::PointCloud<pcl::PointXYZ>::Ptr> segment_clouds(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::SacModel sm){
-
-    pcl::PointCloud<pcl::PointXYZ>::Ptr road_cloud (new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr obstacle_cloud (new pcl::PointCloud<pcl::PointXYZ>);
-
-    pcl::PointIndices::Ptr inliers_seg{new pcl::PointIndices};
-    pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients ());
-    pcl::SACSegmentation<pcl::PointXYZ> segmenter;
-
-    segmenter.setOptimizeCoefficients(true);
-    segmenter.setModelType(sm);
-    segmenter.setMethodType(pcl::SAC_RANSAC);
-
-    segmenter.setDistanceThreshold(0.1);
-    // segmenter.setMaxIterations(100);
-
-    segmenter.setInputCloud(cloud);
-    segmenter.segment (*inliers_seg, *coefficients);
-
-	if (inliers_seg->indices.size () == 0)
-	{
-        // Failure
-	}
-
-	pcl::ExtractIndices<pcl::PointXYZ> extract_seg;
-	extract_seg.setInputCloud(cloud);
-	extract_seg.setIndices(inliers_seg);
-    
-	extract_seg.setNegative(false);
-	extract_seg.filter(*road_cloud);
-
-    extract_seg.setNegative(true);
-    extract_seg.filter(*obstacle_cloud);
-
-    return std::make_tuple(road_cloud, obstacle_cloud);
-
-} // segment_clouds()
-
 int get_x_index_from_index(const int index){
     return index % grid_width;
 } // get_x_index_from_index()
@@ -204,19 +163,29 @@ bool is_validPoint(double x, double y)
     }
 } // is_validPoint()
 
-void transform_occupancyGridMap(const Eigen::Vector2d& translation, double diff_odom_yaw, std::vector<GridCell>& map){
+void transform_pointCloud(nav_msgs::Odometry odom, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, bool inv){
+    Eigen::Matrix3f mat3 = Eigen::Quaternionf(odom.pose.pose.orientation.w, odom.pose.pose.orientation.x, odom.pose.pose.orientation.y, odom.pose.pose.orientation.z).toRotationMatrix();
+    Eigen::Matrix4f mat4 = Eigen::Matrix4f::Identity();
+    mat4.block(0,0,3,3) = mat3;
+    if(inv)
+        pcl::transformPointCloud( *cloud, *cloud, mat4.inverse());
+    else
+        pcl::transformPointCloud( *cloud, *cloud, mat4);
+}
+
+void transform_occupancyGridMap(const Eigen::Vector2d& translation, double odom_yaw, std::vector<GridCell>& map){
     
     const double dx = translation(0);
     const double dy = translation(1);
-    const double c_yaw = cos(diff_odom_yaw);
-    const double s_yaw = sin(diff_odom_yaw);
+    const double c_yaw = cos(-odom_yaw);
+    const double s_yaw = sin(-odom_yaw);
 
-    const double dx_grid = dx / resolution;
-    const double dy_grid = dy / resolution;
+    const double dx_grid = (dx*c_yaw - dy*s_yaw) / resolution;
+    const double dy_grid = (dx*s_yaw + dy*c_yaw) / resolution;
 
     Eigen::Matrix3d affine;
-    affine <<   c_yaw, -s_yaw,  dx_grid,
-                s_yaw,  c_yaw,  dy_grid,
+    affine <<   1, 0,  dx_grid,
+                0, 1,  dy_grid,
                 0,          0,        1;
     
     const Eigen::Matrix3d affine_inv = affine.inverse();
@@ -240,7 +209,6 @@ void transform_occupancyGridMap(const Eigen::Vector2d& translation, double diff_
             continue;
         if(y_0 < -grid_width_2 || grid_width_2 <= y_1)
             continue;
-        
         const int index_0_0 = (y_0 + grid_width_2) * grid_width + x_0 + grid_width_2;
         const int index_0_1 = (y_1 + grid_width_2) * grid_width + x_0 + grid_width_2;
         const int index_1_0 = (y_0 + grid_width_2) * grid_width + x_1 + grid_width_2;
@@ -298,8 +266,6 @@ void input_cloud_to_occupancyGridMap(const pcl::PointCloud<pcl::PointXYZ>::Ptr& 
     std::vector<double>beam_list(beam_num, sqrt(2) * width_2);
     const double beam_angle_resolution = 2.0 * M_PI / (double)beam_num;
 
-    // occupancyGridMap.clear();
-    // occupancyGridMp.resize(grid_num);
     const int cloud_size = cloud_ptr->points.size();
     std::vector<bool> obstacle_indices(grid_num, false);
 
@@ -332,7 +298,7 @@ void input_cloud_to_occupancyGridMap(const pcl::PointCloud<pcl::PointXYZ>::Ptr& 
     set_clear_GridCells(beam_list, obstacle_indices, occupancyGridMap);
 } // input_cloud_to_occupancyGridMap()
 
-void publish_occupancyGridMap(const ros::Time& stamp, const std::string& frame_id)
+void publish_occupancyGridMap(const ros::Time& stamp, const std::string& frame_id, nav_msgs::Odometry odom)
 {
     nav_msgs::OccupancyGrid og;
     og.header.stamp = stamp;
@@ -340,12 +306,13 @@ void publish_occupancyGridMap(const ros::Time& stamp, const std::string& frame_i
     og.info.resolution = resolution;
     og.info.width = grid_width;
     og.info.height = grid_width;
-    og.info.origin.position.x = -width_2;
-    og.info.origin.position.y = -width_2;
+    og.info.origin.position.x = -width_2+odom.pose.pose.position.x;
+    og.info.origin.position.y = -width_2+odom.pose.pose.position.y;
+    og.info.origin.position.z = +odom.pose.pose.position.z;
     og.info.origin.orientation.w = 1.0;
     og.data.resize(grid_num);
     for(int i=0;i<grid_num;i++){
-        og.data[i] = occupancyGridMap[i].get_occupancy() * 100;
+        og.data[i] = occupancyGridMap[i].get_occupancy() * 99 + 1;
     } // for i
     og.header.stamp = ros::Time::now();
     grid_pub.publish(og);
@@ -382,50 +349,34 @@ void callback(const sensor_msgs::PointCloud2ConstPtr& ros_pc_input, const nav_ms
     pcl::PointCloud<pcl::PointXYZ>::Ptr pc_filtered(new pcl::PointCloud<pcl::PointXYZ>);
     
     pc_filtered = downsample_cloud(pc_input, 0.1f);
-    pc_filtered = crop_cloud(pc_filtered, Eigen::Vector4f(-10, -10, -1, 1), Eigen::Vector4f(10, 10, 1.2, 1));
-    pc_filtered = remove_roof(pc_filtered, Eigen::Vector4f(-1, -1, -1, 1), Eigen::Vector4f(1, 1, 1, 1));
 
-    std::tuple<pcl::PointCloud<pcl::PointXYZ>::Ptr, pcl::PointCloud<pcl::PointXYZ>::Ptr> pc_segmented;
-    pc_segmented = segment_clouds(pc_filtered, pcl::SACMODEL_PLANE);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr pc_road(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr pc_obstacle(new pcl::PointCloud<pcl::PointXYZ>);
+    groundRemove(*pc_filtered, pc_obstacle, pc_road);
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr pc_road = std::get<0>(pc_segmented);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr pc_obstacle = std::get<1>(pc_segmented);
-
-    pc_obstacle = crop_cloud(pc_obstacle, Eigen::Vector4f(-10, -10, -0.6, 1), Eigen::Vector4f(10, 10, 1.2, 1));
+    pc_obstacle = crop_cloud(pc_obstacle, Eigen::Vector4f(-10, -10, -0.5, 1), Eigen::Vector4f(10, 10, 0.7, 1));
     
     static Eigen::Vector2d last_odom_pos(odom_input->pose.pose.position.x, odom_input->pose.pose.position.y);
     static double last_odom_yaw = tf2::getYaw(odom_input->pose.pose.orientation);
-    /*
-    //const std::string sensor_frame_id = ros_pc_input.header.frame_id;//remove_firstSlash(pc_obstacle->header.frame_id);
-    //const std::string base_frame_id = odom_input->header.frame_id;//remove_firstSlash(odom_input->header.frame_id);
-
-    try{
-        geometry_msgs::TransformStamped transform;
-        transform = tf_buffer.lookupTransform(base_frame_id, sensor_frame_id, ros::Time(0));
-        const Eigen::Matrix4d mat = tf2::transformToEigen(transform.transform).matrix().cast<double>();
-        pcl::transformPointCloud(*pc_obstacle, *pc_obstacle, mat);
-        pc_obstacle->header.frame_id = base_frame_id;
-    }catch(tf2::TransformException& ex){
-        std::cout << ex.what() << std::endl;
-        return;
-    }
-    */
 
     const Eigen::Vector2d odom_pos(odom_input->pose.pose.position.x, odom_input->pose.pose.position.y);
     const double odom_yaw = tf2::getYaw(odom_input->pose.pose.orientation);
     const Eigen::Vector2d diff_odom_pos = Eigen::Rotation2Dd(-last_odom_yaw).toRotationMatrix() * (odom_pos - last_odom_pos);
     double diff_odom_yaw = odom_yaw - last_odom_yaw;
     diff_odom_yaw = atan2(sin(diff_odom_yaw), cos(diff_odom_yaw));
-    transform_occupancyGridMap(-diff_odom_pos, -diff_odom_yaw, occupancyGridMap);
+    transform_occupancyGridMap(-diff_odom_pos, -odom_yaw, occupancyGridMap);
+    transform_pointCloud(*odom_input, pc_obstacle, false);
     input_cloud_to_occupancyGridMap(pc_obstacle);
 
-    publish_occupancyGridMap(odom_input->header.stamp, base_link_frameId);
+    publish_occupancyGridMap(odom_input->header.stamp, map_frameId, *odom_input);
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr dynamic_cloud(new pcl::PointCloud<pcl::PointXYZ>);
     dynamic_cloud->header = pc_input->header;
     pcl::PointCloud<pcl::PointXYZ>::Ptr static_cloud(new pcl::PointCloud<pcl::PointXYZ>);
     static_cloud->header = pc_input->header;
     divide_cloud(pc_obstacle, dynamic_cloud, static_cloud);
+    transform_pointCloud(*odom_input, dynamic_cloud, true);
+    transform_pointCloud(*odom_input, static_cloud, true);
 
     sensor_msgs::PointCloud2 ros_pc_dynamic, ros_pc_static;
     pcl::toROSMsg(*dynamic_cloud, ros_pc_dynamic);
@@ -454,7 +405,7 @@ int main(int argc, char **argv){
     odom_sub.subscribe(nh, "/hdl_localization/odom", 10);
     sync.registerCallback(boost::bind(&callback, _1, _2));
 
-    grid_pub = nh.advertise<nav_msgs::OccupancyGrid>("occupancy_grid", 1);
+    grid_pub = nh.advertise<nav_msgs::OccupancyGrid>("/costmap_node/marged_costmap", 1);
     dynamic_pub = nh.advertise<sensor_msgs::PointCloud2>("/cloud/dynamic", 1);
     static_pub = nh.advertise<sensor_msgs::PointCloud2>("/cloud/static", 1);
 

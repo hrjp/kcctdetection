@@ -1,6 +1,30 @@
 <launch>
-    <node pkg="kcctdetection" name="dynamicCloudDetection" type="dynamicCloudDetection" >
+    
+    <!--node pkg="kcctdetection" name="dynamicObstacleTracking" type="dynamicObstacleTracking" >
+    </node-->
+
+    <!--node pkg="kcctdetection" name="map2pc" type="map2pc" >
+    </node-->
+
+    <!--node pkg="kcctdetection" name="test_node" type="test_node" >
+    </node-->
+
+    <node pkg="kcctdetection" type="laneDetection" name="laneDetection">
+		<param name="channel_threshold" value="30" />
+		<param name="angle_threshold" value="500.0" />
+		<param name="intensity_threshold" value="5.0" />
+		<param name="lane_candidate" value="4" />
+		<param name="lane_width" value="3.0" />
+		<param name="x_std_dev_threshold" value="4.0" />
+		<param name="y_std_dev_threshold" value="0.2" />
+	</node>
+
+    <node pkg="kcctnavigation" name="costmap_static" type="costmap_static" >
     </node>
-    <node pkg="kcctdetection" name="cloudClustering" type="cloudClustering" >
-    </node>
+    
+    <!--node pkg="kcctdetection" name="dynamicCloudDetection" type="dynamicCloudDetection" >
+    </node-->
+    
+    <!--node pkg="kcctdetection" name="cloudClustering" type="cloudClustering" >
+    </node-->
 </launch>
