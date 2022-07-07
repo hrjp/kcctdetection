@@ -21,6 +21,7 @@
 #include <fstream>
 #include <sstream>
 
+#include <kcctdetection/robot_state.h>
 #include <kcctdetection/waypoint_type.h>
 
 using namespace std;
@@ -36,6 +37,12 @@ std_msgs::String now_type;
 void now_type_callback(const std_msgs::String& now_type_)
 {
     now_type=now_type_;
+}
+
+RobotState _robotState;
+void robotState_cb(const std_msgs::String& robotState)
+{
+  _robotState = String2RobotState(robotState.data);
 }
 
 
@@ -62,7 +69,7 @@ geometry_msgs::Twist person_tracking(double front_angle,double vel_max){
         calc_vel.angular.z=-front_angle;
         calc_vel.angular.z*=angle_p;
     calc_vel.angular.z=double_constrain(calc_vel.angular.z,-angle_max,angle_max);
-    if(now_type.data==waypoint_type_str(waypoint_type::person_detection)){
+    if(now_type.data==waypoint_type_str(waypoint_type::person_detection)||_robotState == RobotState::PERSON_TRACKING){
       if(detect_once_flag){
         detect_once=true;
         detect_once_flag=false;
@@ -120,6 +127,8 @@ int main(int argc, char **argv){
     ros::Subscriber now_type_sub = lSubscriber.subscribe("waypoint/now_type", 10, now_type_callback);
     //pcl_handler subscliber
     ros::Subscriber pcl_sub = lSubscriber.subscribe("/pcl_handler/front_dist", 50, pcl_callback);
+
+    ros::Subscriber robotState_sub = lSubscriber.subscribe("mode", 10, robotState_cb);
 
     //cmd_vel publisher
     cmd_pub=n.advertise<geometry_msgs::Twist>("camera_cmd_vel", 1);
