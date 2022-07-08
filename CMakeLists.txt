@@ -130,6 +130,7 @@ include_directories(
 )
 
 set(HEADERS include/kcctdetection/waypoint_type.h)
+set(HEADERS include/kcctdetection/robot_state.h)
 
 add_executable(colorTracking   src/colorTracking.cpp)
 target_link_libraries(colorTracking ${catkin_LIBRARIES})
